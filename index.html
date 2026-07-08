@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gender Reveal - It's a BOY!</title>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #f7f9fc;
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        h1 {
+            color: #555;
+            margin-bottom: 20px;
+            font-size: 24px;
+            text-align: center;
+        }
+
+        /* 카드 컨테이너 */
+        .card-container {
+            position: relative;
+            width: 320px;
+            height: 400px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            border-radius: 16px;
+            overflow: hidden;
+            background-color: #fff;
+        }
+
+        /* 1. 밑바닥에 깔린 결과 화면 (아들 고정) */
+        .result-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            box-sizing: border-box;
+            padding: 20px;
+            text-align: center;
+            transition: background-color 0.5s ease;
+        }
+
+        /* 변경 전 기본 백그라운드 */
+        .result-layer.default { background-color: #ffffff; }
+        
+        /* 스크래치 완료 후 아들 스타일 (파스텔 블루) */
+        .result-layer.boy { 
+            background-color: #e3f2fd; 
+            color: #1565c0;
+        }
+
+        /* 상단 타이틀 스타일 (기본 대기 상태에서만 노출) */
+        .result-title {
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #777;
+        }
+
+        .result-text {
+            font-size: 36px;
+            font-weight: 900;
+            letter-spacing: 2px;
+            line-height: 1.5; /* 세 줄이 되었을 때의 균형감 있는 행간 조절 */
+        }
+
+        /* 2. 위에 덮인 스크래치 캔버스 */
+        #scratch-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>✨ 당첨을 확인해보세요! ✨</h1>
+
+    <div class="card-container">
+        <div id="result-layer" class="result-layer default">
+            <div id="result-title" class="result-title">두구두구두구</div>
+            <div id="gender-text" class="result-text">???</div>
+        </div>
+        <canvas id="scratch-canvas"></canvas>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('scratch-canvas');
+        const ctx = canvas.getContext('2d');
+        const resultLayer = document.getElementById('result-layer');
+        const resultTitle = document.getElementById('result-title');
+        const genderText = document.getElementById('gender-text');
+
+        let isDrawing = false;
+        let isRevealed = false;
+
+        // 스크래치 카드 초기화 및 그리기
+        function initScratch() {
+            isRevealed = false;
+            
+            resultLayer.className = 'result-layer default';
+            resultTitle.style.display = 'block'; // 타이틀 다시 보이기
+            genderText.innerText = '???';
+
+            // 캔버스 크기 맞추기
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+
+            // 1. 스크래치 덮개 배경 그리기
+            ctx.fillStyle = '#b0bec5';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 2. 안내 문구 추가
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 18px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('💡 여기에 터치하고 슥슥 긁기', canvas.width / 2, canvas.height / 2);
+        }
+
+        // 마우스 및 터치 이벤트 바인딩
+        canvas.addEventListener('mousedown', startDrawing);
+        canvas.addEventListener('mousemove', draw);
+        canvas.addEventListener('mouseup', stopDrawing);
+        canvas.addEventListener('mouseleave', stopDrawing);
+
+        canvas.addEventListener('touchstart', (e) => { startDrawing(e.touches[0]); });
+        canvas.addEventListener('touchmove', (e) => { e.preventDefault(); draw(e.touches[0]); }, { passive: false });
+        canvas.addEventListener('touchend', stopDrawing);
+
+        function startDrawing(e) {
+            isDrawing = true;
+            draw(e); 
+        }
+
+        function draw(e) {
+            if (!isDrawing || isRevealed) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            ctx.globalCompositeOperation = 'destination-out';
+            ctx.beginPath();
+            ctx.arc(x, y, 25, 0, Math.PI * 2);
+            ctx.fill();
+
+            checkRevealPercent();
+        }
+
+        function stopDrawing() {
+            isDrawing = false;
+        }
+
+        // 긁은 면적 계산
+        function checkRevealPercent() {
+            const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const pixels = imgData.data;
+            let transparentPixels = 0;
+
+            for (let i = 3; i < pixels.length; i += 4) {
+                if (pixels[i] === 0) transparentPixels++;
+            }
+
+            const percent = (transparentPixels / (pixels.length / 4)) * 100;
+
+            if (percent > 40 && !isRevealed) {
+                revealResult();
+            }
+        }
+
+        // 결과 공개
+        function revealResult() {
+            isRevealed = true;
+            ctx.clearRect(0, 0, canvas.width, canvas.height); // 덮개 완전 제거
+
+            resultLayer.className = 'result-layer boy';
+            
+            // 변경된 부분 1: 결과 공개 시 상단 '두구두구두구?' 텍스트 공간 삭제
+            resultTitle.style.display = 'none';
+            
+            // 변경된 부분 2: 이모티콘까지 <br>을 넣어 총 3줄로 출력되도록 수정
+            genderText.innerHTML = '토토<br>is a BOY!<br>👦';
+            
+            // 파란색 계열 폭죽 효과
+            triggerConfetti(['#64b5f6', '#2196f3', '#1565c0', '#ffffff']);
+        }
+
+        // 폭죽 애니메이션
+        function triggerConfetti(colors) {
+            const duration = 3.5 * 1000;
+            const end = Date.now() + duration;
+
+            (function frame() {
+                confetti({
+                    particleCount: 4,
+                    angle: 60,
+                    spread: 60,
+                    origin: { x: 0, y: 0.85 },
+                    colors: colors
+                });
+                confetti({
+                    particleCount: 4,
+                    angle: 120,
+                    spread: 60,
+                    origin: { x: 1, y: 0.85 },
+                    colors: colors
+                });
+
+                if (Date.now() < end) {
+                    requestAnimationFrame(frame);
+                }
+            }());
+        }
+
+        window.onload = initScratch;
+    </script>
+</body>
+</html>
